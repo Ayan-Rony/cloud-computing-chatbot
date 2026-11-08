@@ -33,6 +33,11 @@ def load_vectorstore():
 with st.sidebar:
     st.header("⚙️ Configuration")
     api_key_env = os.getenv("GROQ_API_KEY", "")
+    try:
+        if "GROQ_API_KEY" in st.secrets:
+            api_key_env = st.secrets["GROQ_API_KEY"]
+    except Exception:
+        pass
     api_key_input = st.text_input(
         "Groq API Key:",
         value=api_key_env,
