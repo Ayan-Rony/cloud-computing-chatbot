@@ -1,7 +1,9 @@
-c:\Users\ronyg\Desktop\chatbot\
-├── cloud_computing.pdf      <-- Copy your 441-page PDF here
-├── requirements.txt         <-- Python packages
-├── .env                     <-- Your secret OpenAI API key
-├── ingest.py                <-- Run once: creates the vector index
-├── app.py                   <-- Modern Streamlit web application
-└── faiss_index/             <-- Automatically created by ingest.py
+streamlit>=1.35.0
+langchain>=0.2.14
+langchain-community>=0.2.12
+langchain-core>=0.2.0
+langchain-groq>=0.1.9
+groq>=0.9.0
+faiss-cpu>=1.8.0
+sentence-transformers>=3.0.0
+python-dotenv>=1.0.1
