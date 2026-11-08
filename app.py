@@ -5,6 +5,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from groq import Groq
 
 load_dotenv()
 
@@ -15,6 +16,20 @@ st.set_page_config(
 )
 
 INDEX_DIR = "faiss_index"
+
+# 🔒 Safely retrieve API Key in backend memory (never exposed in the browser HTML)
+def get_api_key():
+    key = ""
+    try:
+        if "GROQ_API_KEY" in st.secrets:
+            key = st.secrets["GROQ_API_KEY"]
+    except Exception:
+        pass
+    if not key:
+        key = os.getenv("GROQ_API_KEY", "")
+    return key
+
+api_key = get_api_key()
 
 @st.cache_resource(show_spinner=False)
 def load_embeddings():
@@ -30,24 +45,35 @@ def load_vectorstore():
     embeddings = load_embeddings()
     return FAISS.load_local(INDEX_DIR, embeddings, allow_dangerous_deserialization=True)
 
+# ----------------- Sidebar -----------------
 with st.sidebar:
     st.header("⚙️ Configuration")
-    api_key_env = os.getenv("GROQ_API_KEY", "")
-    try:
-        if "GROQ_API_KEY" in st.secrets:
-            api_key_env = st.secrets["GROQ_API_KEY"]
-    except Exception:
-        pass
-    api_key_input = st.text_input(
-        "Groq API Key:",
-        value=api_key_env,
-        type="password",
-        help="Get a free key from https://console.groq.com/keys"
-    )
     
+    # Shows a clean status badge instead of exposing your key
+    if api_key:
+        st.success("🟢 System Online")
+    else:
+        # Only asks for a key if the server secret is missing
+        api_key = st.text_input(
+            "Groq API Key:",
+            type="password",
+            help="Enter key if running locally without secrets"
+        )
+
+    # Dynamically fetch available models behind the scenes
+    available_models = ["openai/gpt-oss-20b","openai/gpt-oss-safeguard-20b"]
+    if api_key:
+        try:
+            client = Groq(api_key=api_key)
+            model_list = [m.id for m in client.models.list().data if "whisper" not in m.id]
+            if model_list:
+                available_models = sorted(model_list)
+        except Exception:
+            pass
+
     model_name = st.selectbox(
         "Select Model:",
-        options=["openai/gpt-oss-20b","openai/gpt-oss-safeguard-20b"],
+        options=available_models,
         index=0
     )
     
@@ -59,8 +85,9 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
+# ----------------- Main Chat -----------------
 st.title("☁️ Cloud Computing Textbook Assistant")
-st.caption("Powered by Groq & LangChain • Lightning-fast responses from your 441-page PDF")
+st.caption(f"Connected to model: `{model_name}` • Answers grounded in your 441-page PDF")
 
 vectorstore = load_vectorstore()
 if vectorstore is None:
@@ -69,7 +96,7 @@ if vectorstore is None:
 
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Hello! I am ready to answer any questions from your Cloud Computing book."}
+        {"role": "assistant", "content": "Hello! I am ready to answer any questions from your Cloud Computing textbook."}
     ]
 
 for msg in st.session_state.messages:
@@ -81,8 +108,8 @@ for msg in st.session_state.messages:
                     st.markdown(f"**Page {src['page']}**: {src['text']}")
 
 if prompt := st.chat_input("Ask a question from the book..."):
-    if not api_key_input:
-        st.error("Please enter your Groq API Key in the sidebar or `.env` file.")
+    if not api_key:
+        st.error("API Key not configured. Please contact the administrator.")
         st.stop()
 
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -116,7 +143,7 @@ if prompt := st.chat_input("Ask a question from the book..."):
         llm = ChatGroq(
             model=model_name,
             temperature=temperature,
-            api_key=api_key_input
+            api_key=api_key
         )
 
         messages_payload = [SystemMessage(content=system_instruction)]
@@ -139,5 +166,3 @@ if prompt := st.chat_input("Ask a question from the book..."):
         st.session_state.messages.append({
             "role": "assistant",
             "content": full_response,
-            "sources": sources
-        })
